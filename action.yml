@@ -109,19 +109,90 @@ runs:
         cd "${{ github.workspace }}"
         ${{ inputs.platform == 'windows' && '& ' || '' }}${{ env.QB64PE }} -x -w "${{ inputs.source-file }}" -o "${{ env.EXECUTABLE }}"
     
-    - name: Create archive (Linux/macOS)
+    - name: Prepare release package (Linux/macOS)
       if: inputs.platform != 'windows'
       shell: bash
       run: |
         cd "${{ github.workspace }}"
-        tar -czf "${{ env.ARCHIVE }}" "${{ env.EXECUTABLE }}"
+        
+        # Create temporary packaging directory
+        PACKAGE_DIR="${{ inputs.project-name }}-package"
+        mkdir -p "$PACKAGE_DIR"
+        
+        # Copy all files except source code, submodules, and git files
+        rsync -av \
+          --exclude='*.bas' --exclude='*.BAS' \
+          --exclude='*.bi' --exclude='*.BI' \
+          --exclude='*.bm' --exclude='*.BM' \
+          --exclude='*.frm' --exclude='*.FRM' \
+          --exclude='.git/' \
+          --exclude='.gitmodules' \
+          --exclude='submodules/' \
+          ./ "$PACKAGE_DIR/"
+        
+        # Copy the compiled executable to the package
+        cp "${{ env.EXECUTABLE }}" "$PACKAGE_DIR/"
+        
+        # Create archive from the package directory
+        tar -czf "${{ env.ARCHIVE }}" -C "$PACKAGE_DIR" .
+        
+        # Cleanup
+        rm -rf "$PACKAGE_DIR"
     
-    - name: Create archive (Windows)
+    - name: Prepare release package (Windows)
       if: inputs.platform == 'windows'
       shell: pwsh
       run: |
         cd "${{ github.workspace }}"
-        Compress-Archive -Path "${{ env.EXECUTABLE }}" -DestinationPath "${{ env.ARCHIVE }}"
+        
+        # Create temporary packaging directory
+        $packageDir = "${{ inputs.project-name }}-package"
+        New-Item -ItemType Directory -Force -Path $packageDir | Out-Null
+        
+        # Define exclusion patterns (case insensitive)
+        $excludePatterns = @(
+          '*.bas', '*.bi', '*.bm', '*.frm',
+          '.git', '.gitmodules', 'submodules'
+        )
+        
+        # Copy all items except excluded ones
+        Get-ChildItem -Path . -Recurse | ForEach-Object {
+          $relativePath = $_.FullName.Substring($PWD.Path.Length + 1)
+          $shouldExclude = $false
+          
+          foreach ($pattern in $excludePatterns) {
+            if ($_.Name -like $pattern -or $relativePath -like "*$pattern*") {
+              $shouldExclude = $true
+              break
+            }
+          }
+          
+          if (-not $shouldExclude -and $_.FullName -notlike "*$packageDir*") {
+            $destPath = Join-Path $packageDir $relativePath
+            $destDir = Split-Path $destPath -Parent
+            
+            if (-not (Test-Path $destDir)) {
+              New-Item -ItemType Directory -Force -Path $destDir | Out-Null
+            }
+            
+            if ($_.PSIsContainer) {
+              if (-not (Test-Path $destPath)) {
+                New-Item -ItemType Directory -Force -Path $destPath | Out-Null
+              }
+            } else {
+              Copy-Item $_.FullName -Destination $destPath -Force
+            }
+          }
+        }
+        
+        # Copy the compiled executable to the package
+        Copy-Item "${{ env.EXECUTABLE }}" -Destination "$packageDir/" -Force
+        
+        # Create archive from the package directory
+        Compress-Archive -Path "$packageDir\*" -DestinationPath "${{ env.ARCHIVE }}" -Force
+        
+        # Cleanup
+        Remove-Item -Recurse -Force $packageDir
     
     - name: Upload artifact
       uses: actions/upload-artifact@v4
