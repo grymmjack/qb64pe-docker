@@ -17,7 +17,7 @@ The QB64PE Docker action provides:
 In your QB64PE project, create `.github/workflows/build.yml`:
 
 ```yaml
-name: Build My QB64PE Project
+name: Build MyQB64PE-Program
 
 on:
   push:
@@ -27,12 +27,47 @@ on:
     branches: [ main ]
 
 jobs:
-  build:
-    uses: grymmjack/qb64pe-docker/.github/workflows/reusable-build.yml@main
-    with:
-      source-file: 'src/main.bas'
-      project-name: 'my-awesome-game'
-      qb64pe-version: 'v4.3.0'
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Build for Linux
+        uses: grymmjack/qb64pe-docker@main
+        with:
+          platform: 'linux'
+          source-file: 'MyQB64PE-Program.BAS'
+          project-name: 'MyQB64PE-Program'
+          qb64pe-version: 'v4.3.0'
+  
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Build for Windows
+        uses: grymmjack/qb64pe-docker@main
+        with:
+          platform: 'windows'
+          source-file: 'MyQB64PE-Program.BAS'
+          project-name: 'MyQB64PE-Program'
+          qb64pe-version: 'v4.3.0'
+  
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Build for macOS
+        uses: grymmjack/qb64pe-docker@main
+        with:
+          platform: 'macos'
+          source-file: 'MyQB64PE-Program.BAS'
+          project-name: 'MyQB64PE-Program'
+          qb64pe-version: 'v4.3.0'
 ```
 
 ### 2. Push to GitHub
