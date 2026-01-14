@@ -59,9 +59,9 @@ runs:
       if: inputs.platform == 'linux'
       shell: bash
       run: |
-        docker pull ghcr.io/grymmjack/qb64pe:${{ inputs.qb64pe-version }} || \
+        docker pull ghcr.io/grymmjack/qb64pe-docker:${{ inputs.qb64pe-version }} || \
         docker build --build-arg QB64PE_VERSION=${{ inputs.qb64pe-version }} \
-          -t ghcr.io/grymmjack/qb64pe:${{ inputs.qb64pe-version }} \
+          -t ghcr.io/grymmjack/qb64pe-docker:${{ inputs.qb64pe-version }} \
           https://github.com/grymmjack/qb64pe-docker.git#main
     
     - name: Install QB64PE (macOS)
@@ -99,7 +99,7 @@ runs:
       run: |
         docker run --rm \
           -v "${{ github.workspace }}:/workspace" \
-          ghcr.io/grymmjack/qb64pe:${{ inputs.qb64pe-version }} \
+          ghcr.io/grymmjack/qb64pe-docker:${{ inputs.qb64pe-version }} \
           -x -w "${{ inputs.source-file }}" -o "${{ env.EXECUTABLE }}"
     
     - name: Compile QB64 program (macOS/Windows)
