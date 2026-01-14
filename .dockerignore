@@ -1,0 +1,24 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Documentation
+*.md
+LICENSE
+
+# GitHub
+.github
+
+# IDE
+.vscode
+.idea
+
+# macOS
+.DS_Store
+
+# Build artifacts
+*.exe
+*.o
+*.a
+internal/temp/*

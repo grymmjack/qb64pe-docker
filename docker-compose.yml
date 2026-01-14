@@ -1,0 +1,17 @@
+services:
+  qb64pe:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        QB64PE_VERSION: v4.3.0
+    image: qb64pe:latest
+    container_name: qb64pe-compiler
+    volumes:
+      # Mount current directory for easy access to your QB64 code
+      - ./workspace:/workspace
+    working_dir: /workspace
+    # Override entrypoint to keep container running for interactive use
+    # entrypoint: /bin/bash
+    # stdin_open: true
+    # tty: true

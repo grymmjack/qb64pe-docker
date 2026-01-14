@@ -1,0 +1,130 @@
+name: 'QB64PE Multi-Platform Build'
+description: 'Build QB64PE projects for Linux, macOS, and Windows with automatic releases'
+author: 'grymmjack'
+
+branding:
+  icon: 'code'
+  color: 'blue'
+
+inputs:
+  source-file:
+    description: 'Path to the .bas source file to compile (relative to workspace)'
+    required: true
+  project-name:
+    description: 'Name of your project (used for artifacts and releases)'
+    required: true
+  qb64pe-version:
+    description: 'QB64PE version to use'
+    required: false
+    default: 'v4.3.0'
+  platform:
+    description: 'Target platform: linux, macos, or windows'
+    required: true
+
+outputs:
+  artifact-name:
+    description: 'Name of the uploaded artifact'
+    value: ${{ steps.set-names.outputs.artifact-name }}
+  executable-name:
+    description: 'Name of the compiled executable'
+    value: ${{ steps.set-names.outputs.executable-name }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Set platform-specific names
+      id: set-names
+      shell: bash
+      run: |
+        PLATFORM="${{ inputs.platform }}"
+        PROJECT="${{ inputs.project-name }}"
+        
+        if [ "$PLATFORM" = "windows" ]; then
+          EXECUTABLE="${PROJECT}.exe"
+          ARCHIVE="${PROJECT}-win-x64.zip"
+        elif [ "$PLATFORM" = "macos" ]; then
+          EXECUTABLE="${PROJECT}"
+          ARCHIVE="${PROJECT}-osx-x64.tar.gz"
+        else
+          EXECUTABLE="${PROJECT}"
+          ARCHIVE="${PROJECT}-lnx-x64.tar.gz"
+        fi
+        
+        echo "executable-name=${EXECUTABLE}" >> $GITHUB_OUTPUT
+        echo "artifact-name=${ARCHIVE}" >> $GITHUB_OUTPUT
+        echo "EXECUTABLE=${EXECUTABLE}" >> $GITHUB_ENV
+        echo "ARCHIVE=${ARCHIVE}" >> $GITHUB_ENV
+    
+    - name: Install QB64PE (Linux)
+      if: inputs.platform == 'linux'
+      shell: bash
+      run: |
+        docker pull ghcr.io/grymmjack/qb64pe:${{ inputs.qb64pe-version }} || \
+        docker build --build-arg QB64PE_VERSION=${{ inputs.qb64pe-version }} \
+          -t ghcr.io/grymmjack/qb64pe:${{ inputs.qb64pe-version }} \
+          https://github.com/grymmjack/qb64pe-docker.git#main
+    
+    - name: Install QB64PE (macOS)
+      if: inputs.platform == 'macos'
+      shell: bash
+      run: |
+        cd /tmp
+        VERSION="${{ inputs.qb64pe-version }}"
+        # Remove 'v' prefix from version for filename
+        VERSION_NUM="${VERSION#v}"
+        curl -L "https://github.com/QB64-Phoenix-Edition/QB64pe/releases/download/${VERSION}/qb64pe_osx-${VERSION_NUM}.tar.gz" -o qb64pe.tar.gz
+        tar -xzf qb64pe.tar.gz
+        cd qb64pe
+        # Pass 1 to prevent IDE from launching
+        ./setup_osx.command 1
+        echo "QB64PE=/tmp/qb64pe/qb64pe" >> $GITHUB_ENV
+    
+    - name: Install QB64PE (Windows)
+      if: inputs.platform == 'windows'
+      shell: pwsh
+      run: |
+        $version = "${{ inputs.qb64pe-version }}"
+        # Remove 'v' prefix from version for filename
+        $versionNum = $version -replace '^v', ''
+        Invoke-WebRequest -Uri "https://github.com/QB64-Phoenix-Edition/QB64pe/releases/download/$version/qb64pe_win-x64-${versionNum}.7z" -OutFile qb64pe.7z
+        7z x qb64pe.7z
+        cd qb64pe
+        # Windows release is pre-compiled, no setup needed
+        $qb64pePath = (Get-Location).Path
+        echo "QB64PE=$qb64pePath\qb64pe.exe" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+    
+    - name: Compile QB64 program (Linux)
+      if: inputs.platform == 'linux'
+      shell: bash
+      run: |
+        docker run --rm \
+          -v "${{ github.workspace }}:/workspace" \
+          ghcr.io/grymmjack/qb64pe:${{ inputs.qb64pe-version }} \
+          -x -w "${{ inputs.source-file }}" -o "${{ env.EXECUTABLE }}"
+    
+    - name: Compile QB64 program (macOS/Windows)
+      if: inputs.platform != 'linux'
+      shell: ${{ inputs.platform == 'windows' && 'pwsh' || 'bash' }}
+      run: |
+        cd "${{ github.workspace }}"
+        ${{ inputs.platform == 'windows' && '& ' || '' }}${{ env.QB64PE }} -x -w "${{ inputs.source-file }}" -o "${{ env.EXECUTABLE }}"
+    
+    - name: Create archive (Linux/macOS)
+      if: inputs.platform != 'windows'
+      shell: bash
+      run: |
+        cd "${{ github.workspace }}"
+        tar -czf "${{ env.ARCHIVE }}" "${{ env.EXECUTABLE }}"
+    
+    - name: Create archive (Windows)
+      if: inputs.platform == 'windows'
+      shell: pwsh
+      run: |
+        cd "${{ github.workspace }}"
+        Compress-Archive -Path "${{ env.EXECUTABLE }}" -DestinationPath "${{ env.ARCHIVE }}"
+    
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.project-name }}-${{ inputs.platform }}
+        path: ${{ github.workspace }}/${{ env.ARCHIVE }}

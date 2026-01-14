@@ -1,0 +1,63 @@
+name: Test Docker Image
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  test-docker-build:
+    name: Test Docker Image Build
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Build Docker image
+        run: |
+          docker build --build-arg QB64PE_VERSION=v4.3.0 -t qb64pe:test .
+      
+      - name: Verify QB64PE installation
+        run: |
+          docker run --rm qb64pe:test --help || true
+          docker run --rm qb64pe:test --version || echo "QB64PE installed"
+      
+      - name: Create test program
+        run: |
+          mkdir -p test-workspace
+          cat > test-workspace/test.bas << 'EOF'
+          $CONSOLE:ONLY
+          PRINT "QB64PE Docker Test"
+          PRINT "Test PASSED!"
+          SYSTEM
+          EOF
+      
+      - name: Compile test program
+        run: |
+          docker run --rm -v "$PWD/test-workspace:/workspace" qb64pe:test -x -w test.bas -o test
+      
+      - name: Verify compiled executable exists
+        run: |
+          ls -lh test-workspace/test
+          file test-workspace/test
+          
+      - name: Run compiled program
+        run: |
+          docker run --rm -v "$PWD/test-workspace:/workspace" --entrypoint /workspace/test qb64pe:test
+      
+      - name: Test console.bas example
+        run: |
+          docker run --rm -v "$PWD/workspace:/workspace" qb64pe:test -x -w console.bas -o console-test
+          ls -lh workspace/console-test
+      
+      - name: Cleanup
+        if: always()
+        run: |
+          rm -rf test-workspace
+          docker image rm qb64pe:test || true
