@@ -1,0 +1,25 @@
+# .qb64pe-ignore for DRAW project
+# Exclude unnecessary files from release packages
+
+# Build artifacts and packages
+includes/
+DRAW-package/
+*-package/
+
+# QB64PE compiler artifacts
+qb64pe/
+*.7z
+
+# Build scripts
+*.command
+*.sh
+*.bat
+
+# Development files
+.github/
+.vscode/
+.gitignore
+.gitattributes
+notes.md
+TODO.md
+CONTRIBUTING.md

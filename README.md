@@ -27,6 +27,7 @@ A Docker container and GitHub Action for compiling QB64 BASIC programs using [QB
 
 ✅ **Multi-platform builds** - Build for Linux, macOS, and Windows in parallel  
 ✅ **Automatic releases** - Create GitHub releases with binaries for all platforms  
+✅ **Smart packaging** - Include only what you need with `.qb64pe-ignore`  
 ✅ **Reusable action** - Drop-in workflow for any QB64PE project  
 ✅ **Docker support** - Compile locally or in CI/CD  
 ✅ **Latest QB64PE** - Built from source with configurable version  
@@ -395,6 +396,14 @@ qb64pe-docker/
 ### For Building
 - 2GB+ RAM
 - 2GB+ disk space
+
+## 📚 Documentation
+
+- 📖 [**Using as a Reusable Action**](docs/REUSABLE-ACTION.md) - Drop-in GitHub Action workflow
+- 📦 [**Release Packaging with .qb64pe-ignore**](docs/QB64PE-IGNORE.md) - Control what goes into releases
+- 📋 [**Usage Guide**](USAGE-GUIDE.md) - Detailed command examples
+- 🚀 [**Quick Start**](QUICKSTART.md) - Get up and running fast
+- 💡 [**Examples**](EXAMPLES.md) - Real-world use cases
 
 ## Contributing
 

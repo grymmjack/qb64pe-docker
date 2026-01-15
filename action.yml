@@ -119,16 +119,37 @@ runs:
         PACKAGE_DIR="${{ inputs.project-name }}-package"
         mkdir -p "$PACKAGE_DIR"
         
-        # Copy all files except source code, submodules, and git files
-        rsync -av \
-          --exclude='*.bas' --exclude='*.BAS' \
-          --exclude='*.bi' --exclude='*.BI' \
-          --exclude='*.bm' --exclude='*.BM' \
-          --exclude='*.frm' --exclude='*.FRM' \
-          --exclude='.git/' \
-          --exclude='.gitmodules' \
-          --exclude='submodules/' \
-          ./ "$PACKAGE_DIR/"
+        # Build default exclusions
+        EXCLUDE_ARGS=""
+        EXCLUDE_ARGS="$EXCLUDE_ARGS --exclude='*.bas' --exclude='*.BAS'"
+        EXCLUDE_ARGS="$EXCLUDE_ARGS --exclude='*.bi' --exclude='*.BI'"
+        EXCLUDE_ARGS="$EXCLUDE_ARGS --exclude='*.bm' --exclude='*.BM'"
+        EXCLUDE_ARGS="$EXCLUDE_ARGS --exclude='*.frm' --exclude='*.FRM'"
+        EXCLUDE_ARGS="$EXCLUDE_ARGS --exclude='.git/'"
+        EXCLUDE_ARGS="$EXCLUDE_ARGS --exclude='.gitmodules'"
+        EXCLUDE_ARGS="$EXCLUDE_ARGS --exclude='submodules/'"
+        EXCLUDE_ARGS="$EXCLUDE_ARGS --exclude='.qb64pe-ignore'"
+        EXCLUDE_ARGS="$EXCLUDE_ARGS --exclude='*.7z'"
+        EXCLUDE_ARGS="$EXCLUDE_ARGS --exclude='qb64pe/'"
+        
+        # Read .qb64pe-ignore if it exists
+        if [ -f ".qb64pe-ignore" ]; then
+          echo "Found .qb64pe-ignore file, processing exclusions..."
+          while IFS= read -r line || [ -n "$line" ]; do
+            # Skip empty lines and comments
+            if [ -n "$line" ] && [[ ! "$line" =~ ^[[:space:]]*# ]]; then
+              # Remove leading/trailing whitespace
+              pattern=$(echo "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+              if [ -n "$pattern" ]; then
+                EXCLUDE_ARGS="$EXCLUDE_ARGS --exclude='$pattern'"
+                echo "  Excluding: $pattern"
+              fi
+            fi
+          done < ".qb64pe-ignore"
+        fi
+        
+        # Copy all files except excluded ones
+        eval rsync -av $EXCLUDE_ARGS ./ "$PACKAGE_DIR/"
         
         # Copy the compiled executable to the package
         cp "${{ env.EXECUTABLE }}" "$PACKAGE_DIR/"
@@ -149,23 +170,57 @@ runs:
         $packageDir = "${{ inputs.project-name }}-package"
         New-Item -ItemType Directory -Force -Path $packageDir | Out-Null
         
-        # Define exclusion patterns (case insensitive)
+        # Define default exclusion patterns (case insensitive)
         $excludePatterns = @(
           '*.bas', '*.bi', '*.bm', '*.frm',
-          '.git', '.gitmodules', 'submodules'
+          '.git', '.gitmodules', 'submodules',
+          '.qb64pe-ignore', '*.7z', 'qb64pe'
         )
+        
+        # Read .qb64pe-ignore if it exists
+        if (Test-Path ".qb64pe-ignore") {
+          Write-Host "Found .qb64pe-ignore file, processing exclusions..."
+          Get-Content ".qb64pe-ignore" | ForEach-Object {
+            $line = $_.Trim()
+            # Skip empty lines and comments
+            if ($line -and -not $line.StartsWith('#')) {
+              $excludePatterns += $line
+              Write-Host "  Excluding: $line"
+            }
+          }
+        }
+        
+        # Function to check if path matches any exclude pattern
+        function Test-ShouldExclude {
+          param($path, $name, $patterns)
+          foreach ($pattern in $patterns) {
+            # Handle directory patterns (ending with /)
+            if ($pattern.EndsWith('/')) {
+              $dirPattern = $pattern.TrimEnd('/')
+              if ($path -like "*\$dirPattern" -or $path -like "*\$dirPattern\*" -or $name -eq $dirPattern) {
+                return $true
+              }
+            }
+            # Handle wildcard patterns
+            elseif ($pattern.Contains('*')) {
+              if ($name -like $pattern -or $path -like "*$pattern*") {
+                return $true
+              }
+            }
+            # Handle exact matches
+            else {
+              if ($name -eq $pattern -or $path -like "*\$pattern" -or $path -like "*\$pattern\*") {
+                return $true
+              }
+            }
+          }
+          return $false
+        }
         
         # Copy all items except excluded ones
         Get-ChildItem -Path . -Recurse | ForEach-Object {
           $relativePath = $_.FullName.Substring($PWD.Path.Length + 1)
-          $shouldExclude = $false
-          
-          foreach ($pattern in $excludePatterns) {
-            if ($_.Name -like $pattern -or $relativePath -like "*$pattern*") {
-              $shouldExclude = $true
-              break
-            }
-          }
+          $shouldExclude = Test-ShouldExclude -path $relativePath -name $_.Name -patterns $excludePatterns
           
           if (-not $shouldExclude -and $_.FullName -notlike "*$packageDir*") {
             $destPath = Join-Path $packageDir $relativePath

@@ -1,0 +1,43 @@
+# .qb64pe-ignore
+# ================
+# Exclude files and directories from QB64PE release packages
+# Syntax is similar to .gitignore
+
+# Build artifacts
+*.7z
+*.tar.gz
+*.zip
+
+# QB64PE compiler directory (if present)
+qb64pe/
+
+# Package directories
+*-package/
+includes/
+DRAW-package/
+
+# Build scripts and commands
+*.command
+*.sh
+*.bat
+
+# Development files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Documentation you don't want in releases
+notes.md
+TODO.md
+CONTRIBUTING.md
+
+# GitHub specific
+.github/
+.gitignore
+.gitattributes
