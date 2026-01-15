@@ -9,6 +9,32 @@ The `.qb64pe-ignore` file allows you to exclude files and directories from your 
 1. Create a `.qb64pe-ignore` file in your project root
 2. Add patterns for files/folders to exclude
 3. The QB64PE action will automatically read and apply these exclusions when packaging
+4. Optionally enable `remove-empty-dirs: true` to clean up empty directories
+
+## Action Parameters
+
+### `remove-empty-dirs` (optional)
+
+Remove empty directories from the final package after exclusions are applied.
+
+- **Default**: `false`
+- **Values**: `true` or `false`
+
+**Example usage:**
+```yaml
+- name: Build for Linux
+  uses: grymmjack/qb64pe-docker@main
+  with:
+    platform: 'linux'
+    source-file: 'MyGame.bas'
+    project-name: 'MyGame'
+    remove-empty-dirs: 'true'  # Clean up empty directories
+```
+
+**When to use:**
+- When excluded files leave behind empty directories
+- To keep your release package clean and minimal
+- When directory structure matters for your distribution
 
 ## Syntax
 

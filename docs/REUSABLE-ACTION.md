@@ -123,8 +123,9 @@ This automatically creates a GitHub release with binaries for:
 |-------|-------------|----------|---------|
 | `source-file` | Path to your .bas source file | Yes | - |
 | `project-name` | Name for artifacts and releases | Yes | - |
+| `platform` | Target platform: linux, macos, or windows | Yes | - |
 | `qb64pe-version` | QB64PE version to use | No | `v4.3.0` |
-| `create-release` | Create releases on tags | No | `true` |
+| `remove-empty-dirs` | Remove empty directories from package | No | `false` |
 
 ### Example Configurations
 
@@ -140,17 +141,22 @@ jobs:
       qb64pe-version: 'v4.2.0'
 ```
 
-#### Disable Automatic Releases
+#### Clean Package with .qb64pe-ignore
+
+Remove empty directories after exclusions:
 
 ```yaml
-jobs:
-  build:
-    uses: grymmjack/qb64pe-docker/.github/workflows/reusable-build.yml@main
+steps:
+  - name: Build for Windows
+    uses: grymmjack/qb64pe-docker@main
     with:
-      source-file: 'src/app.bas'
-      project-name: 'my-app'
-      create-release: false
+      platform: 'windows'
+      source-file: 'game.bas'
+      project-name: 'my-game'
+      remove-empty-dirs: 'true'  # Clean up empty directories
 ```
+
+💡 **Tip**: Use with [.qb64pe-ignore](QB64PE-IGNORE.md) to exclude build artifacts and keep your release packages clean.
 
 ## 🎮 Example Projects
 
@@ -294,9 +300,12 @@ The Linux build uses Docker (pre-compiled QB64PE). macOS/Windows download and co
 3. **Testing**: Test locally with Docker before pushing
 4. **Artifacts**: Download artifacts from Actions tab for testing before tagging
 5. **Console Only**: Use `$CONSOLE:ONLY` for headless programs
+6. **Package Control**: Use `.qb64pe-ignore` to exclude unnecessary files from releases
+7. **Clean Packages**: Enable `remove-empty-dirs: true` when using `.qb64pe-ignore`
 
 ## 📚 Additional Resources
 
+- [.qb64pe-ignore Guide](QB64PE-IGNORE.md) - Control release package contents
 - [QB64PE Documentation](https://github.com/QB64-Phoenix-Edition/QB64pe/wiki)
 - [GitHub Actions Documentation](https://docs.github.com/actions)
 - [Semantic Versioning](https://semver.org/)

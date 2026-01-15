@@ -20,6 +20,10 @@ inputs:
   platform:
     description: 'Target platform: linux, macos, or windows'
     required: true
+  remove-empty-dirs:
+    description: 'Remove empty directories from the release package'
+    required: false
+    default: 'false'
 
 outputs:
   artifact-name:
@@ -154,6 +158,13 @@ runs:
         # Copy the compiled executable to the package
         cp "${{ env.EXECUTABLE }}" "$PACKAGE_DIR/"
         
+        # Remove empty directories if requested
+        if [ "${{ inputs.remove-empty-dirs }}" = "true" ]; then
+          echo "Removing empty directories..."
+          find "$PACKAGE_DIR" -type d -empty -delete
+          echo "Empty directories removed."
+        fi
+        
         # Create archive from the package directory
         tar -czf "${{ env.ARCHIVE }}" -C "$PACKAGE_DIR" .
         
@@ -184,32 +195,43 @@ runs:
             $line = $_.Trim()
             # Skip empty lines and comments
             if ($line -and -not $line.StartsWith('#')) {
-              $excludePatterns += $line
-              Write-Host "  Excluding: $line"
+              # Remove trailing slash for consistency
+              $pattern = $line.TrimEnd('/')
+              $excludePatterns += $pattern
+              Write-Host "  Excluding: $pattern"
             }
           }
         }
         
-        # Function to check if path matches any exclude pattern
+        # Function to check if path should be excluded
         function Test-ShouldExclude {
-          param($path, $name, $patterns)
+          param($fullPath, $relativePath, $name, $isDirectory, $patterns)
+          
           foreach ($pattern in $patterns) {
-            # Handle directory patterns (ending with /)
-            if ($pattern.EndsWith('/')) {
-              $dirPattern = $pattern.TrimEnd('/')
-              if ($path -like "*\$dirPattern" -or $path -like "*\$dirPattern\*" -or $name -eq $dirPattern) {
-                return $true
-              }
-            }
             # Handle wildcard patterns
-            elseif ($pattern.Contains('*')) {
-              if ($name -like $pattern -or $path -like "*$pattern*") {
+            if ($pattern.Contains('*')) {
+              # Check file/dir name
+              if ($name -like $pattern) {
+                return $true
+              }
+              # Check if pattern matches anywhere in path
+              if ($relativePath -like "*$pattern*") {
                 return $true
               }
             }
-            # Handle exact matches
+            # Handle exact matches (works for both files and directories)
             else {
-              if ($name -eq $pattern -or $path -like "*\$pattern" -or $path -like "*\$pattern\*") {
+              # Exact name match
+              if ($name -eq $pattern) {
+                return $true
+              }
+              # Path contains this as a directory component
+              $pathParts = $relativePath -split '\\'
+              if ($pathParts -contains $pattern) {
+                return $true
+              }
+              # Check if we're inside an excluded directory
+              if ($relativePath -like "$pattern\*" -or $relativePath -like "*\$pattern\*") {
                 return $true
               }
             }
@@ -218,23 +240,30 @@ runs:
         }
         
         # Copy all items except excluded ones
-        Get-ChildItem -Path . -Recurse | ForEach-Object {
+        Get-ChildItem -Path . -Recurse -Force | Where-Object {
+          # Skip the package directory itself
+          $_.FullName -notlike "*$packageDir*"
+        } | ForEach-Object {
           $relativePath = $_.FullName.Substring($PWD.Path.Length + 1)
-          $shouldExclude = Test-ShouldExclude -path $relativePath -name $_.Name -patterns $excludePatterns
+          $shouldExclude = Test-ShouldExclude -fullPath $_.FullName -relativePath $relativePath -name $_.Name -isDirectory $_.PSIsContainer -patterns $excludePatterns
           
-          if (-not $shouldExclude -and $_.FullName -notlike "*$packageDir*") {
+          if ($shouldExclude) {
+            Write-Host "  Skipping: $relativePath"
+          } else {
             $destPath = Join-Path $packageDir $relativePath
-            $destDir = Split-Path $destPath -Parent
-            
-            if (-not (Test-Path $destDir)) {
-              New-Item -ItemType Directory -Force -Path $destDir | Out-Null
-            }
             
             if ($_.PSIsContainer) {
+              # Only create directory if it doesn't exist
               if (-not (Test-Path $destPath)) {
                 New-Item -ItemType Directory -Force -Path $destPath | Out-Null
               }
             } else {
+              # Ensure parent directory exists
+              $destDir = Split-Path $destPath -Parent
+              if (-not (Test-Path $destDir)) {
+                New-Item -ItemType Directory -Force -Path $destDir | Out-Null
+              }
+              # Copy file
               Copy-Item $_.FullName -Destination $destPath -Force
             }
           }
@@ -242,6 +271,16 @@ runs:
         
         # Copy the compiled executable to the package
         Copy-Item "${{ env.EXECUTABLE }}" -Destination "$packageDir/" -Force
+        
+        # Remove empty directories if requested
+        if ("${{ inputs.remove-empty-dirs }}" -eq "true") {
+          Write-Host "Removing empty directories..."
+          Get-ChildItem -Path $packageDir -Recurse -Directory | 
+            Where-Object { (Get-ChildItem $_.FullName -Force | Measure-Object).Count -eq 0 } |
+            Sort-Object -Property FullName -Descending |
+            Remove-Item -Force
+          Write-Host "Empty directories removed."
+        }
         
         # Create archive from the package directory
         Compress-Archive -Path "$packageDir\*" -DestinationPath "${{ env.ARCHIVE }}" -Force
